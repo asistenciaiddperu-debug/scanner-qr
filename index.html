@@ -2,28 +2,84 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Escáner QR PRO</title>
+<title>Escáner PRO</title>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
-body { font-family: Arial; text-align:center; background:#111; color:white; }
-#reader { width:300px; margin:auto; }
-.card { padding:15px; border-radius:10px; margin-top:10px; }
-.ok { background:green; }
-.error { background:red; }
-.duplicado { background:orange; }
+body {
+  font-family: Arial;
+  text-align: center;
+  background: #111;
+  color: white;
+}
+
+#reader {
+  width: 300px;
+  margin: auto;
+}
+
+.card {
+  padding: 20px;
+  border-radius: 10px;
+  margin-top: 10px;
+  font-size: 20px;
+}
+
+.ok { background: green; }
+.error { background: red; }
+.duplicado { background: orange; }
+
+#pantalla {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.verde { background: green; }
+.rojo { background: red; }
+.naranja { background: orange; }
 </style>
 </head>
 
 <body>
 
-<h2>📷 Escáner QR PRO</h2>
+<h2>📷 Escáner PRO</h2>
 <div id="reader"></div>
-<div id="resultado" class="card">Activando cámara...</div>
+
+<div id="resultado" class="card">Esperando escaneo...</div>
+<h3>👥 Total: <span id="total">0</span></h3>
+
+<div id="pantalla"></div>
 
 <script>
 const URL = "https://script.google.com/macros/s/AKfycbzZvJJGdl9-2IGjP-KFAu2coTeD3ReZ0rPq71MvwNxj5GMPDpL_apZxc4wFUfUXymkH/exec";
+
+let qr;
+let ultimoCodigo = "";
+
+function vibrar(tipo="ok") {
+  if (!navigator.vibrate) return;
+  navigator.vibrate(tipo === "ok" ? [100,50,100] : [300]);
+}
+
+function hablar(texto) {
+  const msg = new SpeechSynthesisUtterance(texto);
+  msg.lang = "es-ES";
+  speechSynthesis.speak(msg);
+}
+
+function flash(color) {
+  const pantalla = document.getElementById("pantalla");
+  pantalla.className = color;
+  pantalla.style.opacity = "0.6";
+
+  setTimeout(() => pantalla.style.opacity = "0", 300);
+}
 
 function mostrar(data) {
   const div = document.getElementById("resultado");
@@ -31,26 +87,72 @@ function mostrar(data) {
 
   if (data.status === "ok") {
     div.classList.add("ok");
-    div.innerHTML = "✅ " + data.nombre + "<br>" + data.area;
-  } else if (data.status === "duplicado") {
+    flash("verde");
+    vibrar("ok");
+    hablar("Registrado");
+
+    div.innerHTML = `
+      ✅ <b>${data.nombre}</b><br>
+      🏢 ${data.area}
+    `;
+  }
+
+  else if (data.status === "duplicado") {
     div.classList.add("duplicado");
-    div.innerHTML = "⚠️ YA REGISTRADO";
-  } else {
+    flash("naranja");
+    vibrar("error");
+    hablar("Ya registrado");
+
+    div.innerHTML = `
+      ⚠️ YA REGISTRADO<br>
+      <b>${data.nombre}</b>
+    `;
+  }
+
+  else {
     div.classList.add("error");
+    flash("rojo");
+    vibrar("error");
+    hablar("Error");
+
     div.innerHTML = "❌ " + data.mensaje;
+  }
+
+  if (data.total !== undefined) {
+    document.getElementById("total").innerText = data.total;
   }
 }
 
 function onScanSuccess(code) {
+
+  // 🔒 Evita repetir mismo QR
+  if (code === ultimoCodigo) return;
+  ultimoCodigo = code;
+
+  qr.stop();
+
   fetch(URL, {
     method: "POST",
     body: JSON.stringify({ codigo: code })
   })
   .then(r => r.json())
-  .then(d => mostrar(d));
+  .then(d => mostrar(d))
+  .catch(() => {
+    document.getElementById("resultado").innerHTML = "❌ Error de conexión";
+  })
+  .finally(() => {
+    setTimeout(() => {
+      qr.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        onScanSuccess
+      );
+    }, 2000);
+  });
 }
 
-const qr = new Html5Qrcode("reader");
+// 🚀 iniciar cámara automática
+qr = new Html5Qrcode("reader");
 qr.start(
   { facingMode: "environment" },
   { fps: 10, qrbox: 250 },
