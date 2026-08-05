@@ -12,6 +12,8 @@ body {
   text-align: center;
   background: #111;
   color: white;
+  margin: 0;
+  padding: 20px;
 }
 
 #reader {
@@ -43,24 +45,49 @@ body {
 .verde { background: green; }
 .rojo { background: red; }
 .naranja { background: orange; }
+
+.btn-camara {
+  background: #4CAF50;
+  color: white;
+  padding: 15px 30px;
+  font-size: 20px;
+  border: none;
+  border-radius: 10px;
+  margin: 20px 0;
+  cursor: pointer;
+}
+
+.btn-camara:hover {
+  background: #45a049;
+}
+
+.btn-camara:disabled {
+  background: #666;
+  cursor: not-allowed;
+}
 </style>
 </head>
 
 <body>
 
-<h2>📷 Seminario Biblico</h2>
+<h2>📷 FORO ASEZ WAO</h2>
+
+<button id="btnCamara" class="btn-camara" onclick="iniciarCamara()">
+  📷 Activar Cámara
+</button>
+
 <div id="reader"></div>
 
 <div id="resultado" class="card">Esperando escaneo...</div>
-<h3>👥 Total: <span id="total">0</span></h3>
 
 <div id="pantalla"></div>
 
 <script>
-const URL = "https://script.google.com/macros/s/AKfycbyqimv8T6aSEEe4eiEvNFVd0mmf5I4-NoiKdb6lE6kIL3_zpMFQomUx6kpuOyK4i6uDfQ/exec";
+const URL = "https://script.google.com/macros/s/AKfycbxh7YNrs3dyv7_xUDiZ4-M1yoovx-SQiY3geri6ibgq64ELuP7ce0ppsOtd69S0iIjlww/exec";
 
-let qr;
+let qr = null;
 let ultimoCodigo = "";
+let escaneando = false;
 
 function vibrar(tipo="ok") {
   if (!navigator.vibrate) return;
@@ -117,19 +144,17 @@ function mostrar(data) {
 
     div.innerHTML = "❌ " + data.mensaje;
   }
-
-  if (data.total !== undefined) {
-    document.getElementById("total").innerText = data.total;
-  }
 }
 
 function onScanSuccess(code) {
-
+  if (escaneando) return;
+  
   // 🔒 Evita repetir mismo QR
   if (code === ultimoCodigo) return;
   ultimoCodigo = code;
+  escaneando = true;
 
-  qr.stop();
+  if (qr) qr.stop();
 
   fetch(URL, {
     method: "POST",
@@ -142,23 +167,81 @@ function onScanSuccess(code) {
   })
   .finally(() => {
     setTimeout(() => {
-      qr.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        onScanSuccess
-      );
+      escaneando = false;
+      if (qr) {
+        qr.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          onScanSuccess
+        );
+      }
     }, 2000);
   });
 }
 
-// 🚀 iniciar cámara automática
-qr = new Html5Qrcode("reader");
-qr.start(
-  { facingMode: "environment" },
-  { fps: 10, qrbox: 250 },
-  onScanSuccess
-);
+// 🚀 Función para iniciar la cámara (activada por botón)
+async function iniciarCamara() {
+  const btn = document.getElementById("btnCamara");
+  const resultado = document.getElementById("resultado");
+  
+  try {
+    btn.disabled = true;
+    btn.textContent = "🔄 Solicitando permisos...";
+    resultado.innerHTML = "📷 Solicitando permiso de cámara...";
+
+    // Verificar si el navegador soporta getUserMedia
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("Tu navegador no soporta la cámara");
+    }
+
+    // Solicitar permisos primero
+    await navigator.mediaDevices.getUserMedia({ video: true });
+    
+    btn.textContent = "🔄 Iniciando escáner...";
+    resultado.innerHTML = "📷 Activando escáner...";
+
+    // Crear instancia del escáner si no existe
+    if (!qr) {
+      qr = new Html5Qrcode("reader");
+    }
+
+    // Iniciar escáner
+    await qr.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      onScanSuccess
+    );
+
+    btn.textContent = "✅ Cámara activa";
+    btn.style.background = "#666";
+    resultado.innerHTML = "📷 Escáner activo - Escanea un código QR";
+    
+  } catch (err) {
+    console.error("Error:", err);
+    btn.disabled = false;
+    btn.textContent = "📷 Activar Cámara";
+    btn.style.background = "#4CAF50";
+    
+    resultado.innerHTML = "❌ Error: " + err.message;
+    
+    // Mensaje de ayuda
+    alert(
+      "❌ No se pudo acceder a la cámara.\n\n" +
+      "SOLUCIONES:\n" +
+      "1. Usa Chrome o Edge\n" +
+      "2. Haz clic en el candado 🔒 en la barra de direcciones\n" +
+      "3. Permite el acceso a la cámara\n" +
+      "4. Recarga la página y vuelve a intentar"
+    );
+  }
+}
+
+// ⚠️ NO iniciar automáticamente - esperar clic del usuario
+console.log("📷 Presiona el botón para activar la cámara");
 </script>
+
+</body>
+</html>
 
 </body>
 </html>
